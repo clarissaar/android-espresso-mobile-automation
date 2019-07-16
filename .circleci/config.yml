@@ -1,66 +1,31 @@
 version: 2
 jobs:
   build:
-    working_directory: ~/app
+    working_directory: ~/code
     docker:
-    # Android the primary container
-    - image: circleci/android:api-26-alpha
-    environment:
-      JVM_OPTS: -Xmx3200m
-    steps:
-    - checkout
-    - restore_cache:
-        key: jars-{{ checksum "build.gradle" }}-{{ checksum  "app/build.gradle" }}
-    - run:
-        name: Accept licenses
-        command: yes | sdkmanager --licenses || true
-    - run:
-        name: chmod permissions
-        command: chmod +x ./gradlew
-    - run:
-        name: Download Dependencies
-        command: ./gradlew androidDependencies
-    - save_cache:
-        paths:
-        - ~/.gradle
-        key: jars-{{ checksum "build.gradle" }}-{{ checksum  "app/build.gradle" }}
-  test:
-    docker:
-    - image: circleci/android:api-26-alpha
+      - image: circleci/android:api-25-alpha
     environment:
       JVM_OPTS: -Xmx3200m
     steps:
       - checkout
+      - restore_cache:
+          key: jars-{{ checksum "build.gradle" }}-{{ checksum  "app/build.gradle" }}
       - run:
-          name: Accept licenses
-          command: yes | sdkmanager --licenses || true
+         name: Chmod permissions #if permission for Gradlew Dependencies fail, use this.
+         command: sudo chmod +x ./gradlew
       - run:
-          name: chmod permissions
-          command: chmod +x ./gradlew
-      - run:
-          name: Setup emulator
-          command: sdkmanager "system-images;android-25;google_apis;armeabi-v7a" && echo "no" | avdmanager create avd -n emulatorTest -k "system-images;android-25;google_apis;armeabi-v7a"
-      - run:
-          name: Launch emulator
-          command: export LD_LIBRARY_PATH=${ANDROID_HOME}/emulator/lib64:${ANDROID_HOME}/emulator/lib64/qt/lib && emulator -avd emulatorTest -noaudio -no-boot-anim -no-window -no-accel -memory 2048 -verbose &
-          background: true
+          name: Download Dependencies
+          command: ./gradlew androidDependencies
+      - save_cache:
+          paths:
+            - ~/.gradle
+          key: jars-{{ checksum "build.gradle" }}-{{ checksum  "app/build.gradle" }}
       - run:
           name: Run Tests
           command: ./gradlew lint test
-
-      - run:
-          name: Run Instrument Tests MyTaxi
-          command: ./gradlew test
-
-      - store_artifacts:
+      - store_artifacts: # for display in Artifacts: https://circleci.com/docs/2.0/artifacts/ 
           path: app/build/reports
           destination: reports
-
-      - store_test_results:
+      - store_test_results: # for display in Test Summary: https://circleci.com/docs/2.0/collect-test-data/
           path: app/build/test-results
-workflows:
-  version: 2
-  Test.Build:
-    jobs:
-    - build
-    - test
+      # See https://circleci.com/docs/2.0/deployment-integrations/ for deploy examples
