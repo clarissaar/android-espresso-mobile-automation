@@ -1,67 +1,60 @@
 version: 2
 jobs:
   build:
-    working_directory: ~/app
+    working_directory: ~/code
     docker:
-    # Android the primary container
-    - image: circleci/android:api-26-alpha
-    environment:
-      JVM_OPTS: -Xmx3200m
-    steps:
-    - checkout
-    - restore_cache:
-        key: jars-{{ checksum "build.gradle" }}-{{ checksum  "app/build.gradle" }}
-    - run:
-        name: Accept licenses
-        command: yes | sdkmanager --licenses || true
-    - run:
-        name: chmod permissions
-        command: chmod +x ./gradlew
-    - run:
-        name: Download Dependencies
-        command: ./gradlew androidDependencies
-    - save_cache:
-        paths:
-        - ~/.gradle
-        key: jars-{{ checksum "build.gradle" }}-{{ checksum  "app/build.gradle" }}
-  test:
-    working_directory: ~/app
-    docker:
-    - image: circleci/android:api-26-alpha
+      - image: circleci/android:api-25-alpha
     environment:
       JVM_OPTS: -Xmx3200m
     steps:
       - checkout
+      - restore_cache:
+          key: jars-{{ checksum "build.gradle" }}-{{ checksum  "app/build.gradle" }}
+#      - run:
+#         name: Chmod permissions #if permission for Gradlew Dependencies faill, use this.
+#         command: sudo chmod +x ./gradlew
       - run:
-          name: Accept licenses
-          command: yes | sdkmanager --licenses || true
+          name: android SDK license
+          command: yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses || if [ $? -ne '141' ]; then exit $?; fi;  #Captures SIGPIPE 141 error but still allow repeating "y" to accept all licenses
       - run:
-          name: chmod permissions
-          command: chmod +x ./gradlew
+          name: Download Dependencies
+          command: ./gradlew androidDependencies
+      - save_cache:
+          paths:
+            - ~/.gradle
+          key: jars-{{ checksum "build.gradle" }}-{{ checksum  "app/build.gradle" }}
       - run:
-          name: Setup emulator
-          command: sdkmanager "system-images;android-25;google_apis;armeabi-v7a" && echo "no" | avdmanager create avd -n emulatorTest -k "system-images;android-25;google_apis;armeabi-v7a"
+          name: Lists installed targets
+          command: android list target
+          environment:
+          TERM: dumb
       - run:
-          name: Launch emulator
-          command: export LD_LIBRARY_PATH=${ANDROID_HOME}/emulator/lib64:${ANDROID_HOME}/emulator/lib64/qt/lib && emulator -avd emulatorTest -noaudio -no-boot-anim -no-window -no-accel -memory 2048 -verbose &
+          name: Show list of system-images
+          command: sdkmanager --list --verbose | grep system-images
+      - run:
+          name: Setup Emulator
+          command: sdkmanager "system-images;android-21;default;armeabi-v7a" && echo "no" | avdmanager create avd -n test -k "system-images;android-21;default;armeabi-v7a"
+      - run:
+          name: Launch Emulator
+          command: |
+                  cd ${ANDROID_HOME}/emulator;ls
+                  export LD_LIBRARY_PATH=${ANDROID_HOME}/emulator/lib64:${ANDROID_HOME}/emulator/lib64/qt/lib
+                  emulator -avd test -no-window -noaudio -no-boot-anim -no-window -accel on
           background: true
+      - run:
+          name: Wait emulator
+          command: |
+              circle-android wait-for-boot
+              adb shell input keyevent 82
+      - run:
+          name: Run Espresso UI Tests
+          command: ./gradlew :app:connectedDebugAndroidTest   
       - run:
           name: Run Tests
           command: ./gradlew lint test
-
-      - run:
-          name: Run Instrument Tests MyTaxi
-          command: ./gradlew test
-
-      - store_artifacts:
+      - store_artifacts: # for display in Artifacts: https://circleci.com/docs/2.0/artifacts/ 
           path: app/build/reports
           destination: reports
-
-      - store_test_results:
+      - store_test_results: # for display in Test Summary: https://circleci.com/docs/2.0/collect-test-data/
           path: app/build/test-results
-workflows:
-  version: 2
-  Test.Build:
-    jobs:
-    - build
-    - test
+      # See https://circleci.com/docs/2.0/deployment-integrations/ for deploy examples
