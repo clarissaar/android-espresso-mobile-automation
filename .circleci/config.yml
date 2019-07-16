@@ -1,16 +1,5 @@
 version: 2
 jobs:
-dependencies:
-    pre:
-    # Make sure we have the sdkmanager available, and update the Android SDK tools if not
-      - if [ ! -e $ANDROID_HOME/tools/bin/sdkmanager ]; then echo y | android update sdk --no-ui --all --filter tools; fi
-        
-        # Pre-accept Android SDK components licenses
-      - mkdir "$ANDROID_HOME/licenses" || true
-      - echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c55" > "$ANDROID_HOME/licenses/android-sdk-license"
-
-        # Install all the required SDK components
-      - $ANDROID_HOME/tools/bin/sdkmanager --verbose "platform-tools" "build-tools;"$ANDROID_BUILD_TOOLS "extras;google;m2repository"
   build:
     working_directory: ~/code
     docker:
