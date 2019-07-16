@@ -16,6 +16,9 @@ jobs:
       - run:
           name: Download Dependencies
           command: ./gradlew androidDependencies
+      - run:
+          name: remove local settings
+          command: rm local.properties
       - save_cache:
           paths:
             - ~/.gradle
