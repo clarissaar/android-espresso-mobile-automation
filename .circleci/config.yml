@@ -8,6 +8,9 @@ jobs:
       JVM_OPTS: -Xmx3200m
     steps:
       - checkout
+      - run:
+           name: remove local settings
+           command: rm local.properties
       - restore_cache:
           key: jars-{{ checksum "build.gradle" }}
       - run:
