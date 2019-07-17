@@ -17,6 +17,9 @@ jobs:
           name: android SDK license
           command: yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses || if [ $? -ne '141' ]; then exit $?; fi;  #Captures SIGPIPE 141 error but still allow repeating "y" to accept all licenses
       - run:
+          name: remove local settings
+          command: rm -f local.properties
+      - run:
           name: Download Dependencies
           command: ./gradlew androidDependencies
       - save_cache:
