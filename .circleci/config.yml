@@ -55,7 +55,6 @@ jobs:
       - run:
           name: Run Tests
           command: ./gradlew lint test
-      steps:
       - run:
           name: Save test results
           command: |
