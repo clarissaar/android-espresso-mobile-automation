@@ -3,19 +3,19 @@ jobs:
   build:
     working_directory: ~/code
     docker:
-      - image: circleci/android:api-28  # gcloud is baked into this image
+      - image: circleci/android:api-25-alpha
     environment:
       JVM_OPTS: -Xmx3200m
     steps:
       - checkout
       - restore_cache:
           key: jars-{{ checksum "build.gradle" }}-{{ checksum  "app/build.gradle" }}
+#      - run:
+#         name: Chmod permissions #if permission for Gradlew Dependencies faill, use this.
+#         command: sudo chmod +x ./gradlew
       - run:
-         name: Chmod permissions #if permission for Gradlew Dependencies fail, use this.
-         command: sudo chmod +x ./gradlew
-      - run:
-          name: Remove local settings
-          command: rm local.properties      
+          name: android SDK license
+          command: yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses || if [ $? -ne '141' ]; then exit $?; fi;  #Captures SIGPIPE 141 error but still allow repeating "y" to accept all licenses
       - run:
           name: Download Dependencies
           command: ./gradlew androidDependencies
@@ -24,35 +24,37 @@ jobs:
             - ~/.gradle
           key: jars-{{ checksum "build.gradle" }}-{{ checksum  "app/build.gradle" }}
       - run:
-          name: Build debug APK and release APK
+          name: Lists installed targets
+          command: android list target
+          environment:
+          TERM: dumb
+      - run:
+          name: Show list of system-images
+          command: sdkmanager --list --verbose | grep system-images
+      - run:
+          name: Setup Emulator
+          command: sdkmanager "system-images;android-21;default;armeabi-v7a" && echo "no" | avdmanager create avd -n test -k "system-images;android-21;default;armeabi-v7a"
+      - run:
+          name: Launch Emulator
           command: |
-            ./gradlew :app:assembleDebug
-            ./gradlew :app:assembleDebugAndroidTest
+                  cd ${ANDROID_HOME}/emulator;ls
+                  export LD_LIBRARY_PATH=${ANDROID_HOME}/emulator/lib64:${ANDROID_HOME}/emulator/lib64/qt/lib
+                  emulator -avd test -no-window -noaudio -no-boot-anim -no-window -accel on
+          background: true
       - run:
-          name: Store Google Service Account
-          command: echo $GCLOUD_SERVICE_KEY | base64 -di > ${HOME}/gcloud-service-key.json
-      - run:
-          name: Authorize gcloud and set config defaults
+          name: Wait emulator
           command: |
-            sudo gcloud auth activate-service-account firebase-adminsdk-144gc@app-automation-test.iam.gserviceaccount.com --key-file=${HOME}/gcloud-service-key.json
-            sudo gcloud --quiet config set project app-automation-test #${GOOGLE_PROJECT_ID}
+              circle-android wait-for-boot
+              adb shell input keyevent 82
       - run:
-          name: Test with Firebase Test Lab
-          command: >
-            sudo gcloud firebase test android run \
-              --type instrumentation \
-              --app app/build/outputs/apk/debug/app-debug.apk \
-              --test app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
-              --device model=Nexus5X,version=26,locale=en_US,orientation=portrait \
-              --environment-variables coverage=true,coverageFile=/sdcard/tmp/code-coverage/connected/coverage.ec \
-              --directories-to-pull=/sdcard/tmp \
-              --timeout 20m
-            #sudo gcloud firebase test android run \ 
-              #--app <local_server_path>/<app_apk>.apk \ 
-              #--test <local_server_path>/<app_test_apk>.apk \ 
-              #--results-bucket cloud-test-${GOOGLE_PROJECT_ID}
-      #- run:
-          #name: Install gsutil dependency and copy test results data
-          #command: |
-            #sudo pip install -U crcmod
-            #sudo gsutil -m cp -r -U `sudo gsutil ls gs://[BUCKET_NAME]/[OBJECT_NAME] | tail -1` ${CIRCLE_ARTIFACTS}/ | true
+          name: Run Espresso UI Tests
+          command: ./gradlew :app:connectedDebugAndroidTest   
+      - run:
+          name: Run Tests
+          command: ./gradlew lint test
+      - store_artifacts: # for display in Artifacts: https://circleci.com/docs/2.0/artifacts/ 
+          path: app/build/reports
+          destination: reports
+      - store_test_results: # for display in Test Summary: https://circleci.com/docs/2.0/collect-test-data/
+          path: app/build/test-results
+      # See https://circleci.com/docs/2.0/deployment-integrations/ for deploy examples
